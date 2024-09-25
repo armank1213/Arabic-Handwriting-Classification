@@ -180,4 +180,5 @@ const LetterClassificationApp = () => {
   );
 };
 
+
 export default LetterClassificationApp;

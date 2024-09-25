@@ -13,16 +13,27 @@ interface Prediction {
 const LetterClassificationApp = () => {
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const displayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (canvas) {
+    const displayCanvas = displayCanvasRef.current;
+    if (canvas && displayCanvas) {
       const context = canvas.getContext('2d');
-      if (context) {
+      const displayContext = displayCanvas.getContext('2d');
+      if (context && displayContext) {
         context.lineWidth = 2;
         context.lineCap = 'round';
         context.strokeStyle = 'white';
+        context.fillStyle = 'black';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+
+        displayContext.lineWidth = 8;
+        displayContext.lineCap = 'round';
+        displayContext.strokeStyle = 'white';
+        displayContext.fillStyle = 'black';
+        displayContext.fillRect(0, 0, displayCanvas.width, displayCanvas.height);
       }
     }
   }, []);
@@ -34,11 +45,14 @@ const LetterClassificationApp = () => {
 
   const stopDrawing = () => {
     setIsDrawing(false);
-    if (canvasRef.current) {
-      const canvas = canvasRef.current;
+    const canvas = canvasRef.current;
+    const displayCanvas = displayCanvasRef.current;
+    if (canvas && displayCanvas) {
       const ctx = canvas.getContext('2d');
-      if (ctx) {
+      const displayCtx = displayCanvas.getContext('2d');
+      if (ctx && displayCtx) {
         ctx.beginPath();
+        displayCtx.beginPath();
       }
     }
   };
@@ -46,29 +60,40 @@ const LetterClassificationApp = () => {
   const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDrawing) return;
     const canvas = canvasRef.current;
-    if (canvas) {
-      const rect = canvas.getBoundingClientRect();
+    const displayCanvas = displayCanvasRef.current;
+    if (canvas && displayCanvas) {
+      const rect = displayCanvas.getBoundingClientRect();
       const ctx = canvas.getContext('2d');
-      if (ctx) {
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+      const displayCtx = displayCanvas.getContext('2d');
+      if (ctx && displayCtx) {
+        const x = (e.clientX - rect.left) * (canvas.width / displayCanvas.width);
+        const y = (e.clientY - rect.top) * (canvas.height / displayCanvas.height);
         ctx.lineTo(x, y);
         ctx.stroke();
         ctx.beginPath();
         ctx.moveTo(x, y);
+
+        const displayX = e.clientX - rect.left;
+        const displayY = e.clientY - rect.top;
+        displayCtx.lineTo(displayX, displayY);
+        displayCtx.stroke();
+        displayCtx.beginPath();
+        displayCtx.moveTo(displayX, displayY);
       }
     }
-    
-    classifyLetter();
   };
 
   const clearCanvas = () => {
     const canvas = canvasRef.current;
-    if (canvas) {
+    const displayCanvas = displayCanvasRef.current;
+    if (canvas && displayCanvas) {
       const ctx = canvas.getContext('2d');
-      if (ctx) {
+      const displayCtx = displayCanvas.getContext('2d');
+      if (ctx && displayCtx) {
         ctx.fillStyle = 'black';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+        displayCtx.fillStyle = 'black';
+        displayCtx.fillRect(0, 0, displayCanvas.width, displayCanvas.height);
         setPredictions([]);
       }
     }
@@ -77,38 +102,26 @@ const LetterClassificationApp = () => {
   const classifyLetter = async () => {
     const canvas = canvasRef.current;
     if (canvas) {
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        const resizedCanvas = document.createElement("canvas");
-        const resizedCtx = resizedCanvas.getContext("2d");
-
-        if (resizedCtx) {
-          resizedCanvas.width = 32;
-          resizedCanvas.height = 32;
-          resizedCtx.drawImage(canvas, 0, 0, 32, 32);
-
-          const imageData = resizedCanvas.toDataURL('image/png');
-          
-          try {
-            const response = await fetch('http://localhost:8000/classify', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ image: imageData }),
-            });
-            
-            if (!response.ok) {
-              throw new Error('Classification failed');
-            }
-            
-            const result = await response.json();
-            setPredictions(result);
-          } catch (error) {
-            console.error('Error:', error);
-            setPredictions([]);
-          }
+      const imageData = canvas.toDataURL('image/png');
+      
+      try {
+        const response = await fetch('http://localhost:8000/classify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ image: imageData }),
+        });
+        
+        if (!response.ok) {
+          throw new Error('Classification failed');
         }
+        
+        const result = await response.json();
+        setPredictions(result);
+      } catch (error) {
+        console.error('Error:', error);
+        setPredictions([]);
       }
     }
   };
@@ -126,7 +139,7 @@ const LetterClassificationApp = () => {
           </CardHeader>
           <CardContent>
             <canvas
-              ref={canvasRef}
+              ref={displayCanvasRef}
               width={280}
               height={280}
               className="border border-neutral-600 rounded"
@@ -135,9 +148,15 @@ const LetterClassificationApp = () => {
               onMouseOut={stopDrawing}
               onMouseMove={draw}
             />
+            <canvas
+              ref={canvasRef}
+              width={32}
+              height={32}
+              className="hidden"
+            />
             <div className="flex justify-between mt-4">
-              <Button className='bg-neutral-200 hover:bg-neutral-100' onClick={clearCanvas} variant="ghost">Clear</Button>
-              {/* <Button x onClick={classifyLetter}>Classify</Button> */}
+              <Button className='bg-neutral-200 hover:bg-neutral-100 text-black' onClick={clearCanvas}>Clear</Button>
+              <Button className='bg-blue-500 hover:bg-blue-400' onClick={classifyLetter}>Classify</Button>
             </div>
           </CardContent>
         </Card>
@@ -153,7 +172,7 @@ const LetterClassificationApp = () => {
               </div>
             ))
           ) : (
-            <p className="text-neutral-400">Draw a letter to see predictions</p>
+            <p className="text-neutral-400">Draw a letter and click 'Classify' to see predictions</p>
           )}
         </div>
       </div>

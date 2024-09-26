@@ -63,11 +63,11 @@ logger.debug(f"Model architecture: {model}")
 
 arabic_chars = 'أبتثجحخدذرزسشصضطظعغفقكلمنهوي'
 arabic_characters = ['alef', 'beh', 'teh', 'theh', 'jeem', 'hah', 'khah', 'dal', 'thal',
-                    'reh', 'zain', 'seen', 'sheen', 'sad', 'dad', 'tah', 'zah', 'ain',
-                    'ghain', 'feh', 'qaf', 'kaf', 'lam', 'meem', 'noon', 'heh', 'waw', 'yeh']
+                     'reh', 'zain', 'seen', 'sheen', 'sad', 'dad', 'tah', 'zah', 'ain',
+                     'ghain', 'feh', 'qaf', 'kaf', 'lam', 'meem', 'noon', 'heh', 'waw', 'yeh']
 
 transform = transforms.Compose([
-    transforms.Grayscale(),
+    transforms.Resize((32, 32)),
     transforms.ToTensor(),
     transforms.Normalize((0.5,), (0.5,))
 ])
@@ -81,24 +81,28 @@ async def classify_image(image_data: ImageData):
         # Decode the base64 image
         image_bytes = base64.b64decode(image_data.image.split(',')[1])
         
-        # Open the image
-        image = Image.open(io.BytesIO(image_bytes))
+        # Open the image and convert to grayscale
+        image = Image.open(io.BytesIO(image_bytes)).convert('L')
         logger.info(f"Received image size: {image.size}")
         
-        # save the image to a file
+        # Save the received image for debugging
         image.save('received_image.png')
 
-        # Convert image to grayscale
-        gray_image = image.convert('L')
+        # Resize image to 32x32
+        resized_image = image.resize((32, 32))
+        logger.info(f"Resized image size: {resized_image.size}")
+
+        # Save the resized image for debugging
+        resized_image.save('resized_image.png')
 
         # Check if the image is empty (all pixels are black or very close to black)
-        bbox = ImageChops.difference(gray_image, Image.new('L', gray_image.size, 0)).getbbox()
+        bbox = ImageChops.difference(image, Image.new('L', image.size, 0)).getbbox()
         if bbox is None:
             logger.warning("Empty canvas detected")
             return []
 
         # Calculate the percentage of non-black pixels
-        img_array = np.array(gray_image)
+        img_array = np.array(image)
         non_black_pixels = np.sum(img_array > 10)  # Threshold of 10 to account for slight variations
         total_pixels = img_array.size
         non_black_percentage = (non_black_pixels / total_pixels) * 100
@@ -111,10 +115,9 @@ async def classify_image(image_data: ImageData):
             return []
 
         # Preprocess the image
-        image_tensor = transform(image).unsqueeze(0).to(device)
+        image_tensor = transform(resized_image).unsqueeze(0).to(device)
         logger.info(f"Preprocessed tensor shape: {image_tensor.shape}")
         logger.info(f"Tensor min: {image_tensor.min().item()}, max: {image_tensor.max().item()}, mean: {image_tensor.mean().item()}")
-
 
         # Perform the classification
         with torch.no_grad():

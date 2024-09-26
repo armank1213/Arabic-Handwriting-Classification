@@ -8,3 +8,6 @@ Test\ Images\ 3360x32x32
 Train\ Images\ 13440x32x32
 __pycache__
 received_image.png
+processed_image.png
+resized_image.png
+

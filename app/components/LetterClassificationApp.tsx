@@ -102,7 +102,21 @@ const LetterClassificationApp = () => {
   const classifyLetter = async () => {
     const canvas = canvasRef.current;
     if (canvas) {
-      const imageData = canvas.toDataURL('image/png');
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        
+        // Check if the canvas is empty (all pixels are black)
+        const isCanvasEmpty = data.every((value, index) => index % 4 === 3 || value === 0);
+  
+        if (isCanvasEmpty) {
+          alert("Please draw a letter before classifying.");
+          return;
+        }
+      }
+  
+      const imageDataUrl = canvas.toDataURL('image/png');
       
       try {
         const response = await fetch('http://localhost:8000/classify', {
@@ -110,7 +124,7 @@ const LetterClassificationApp = () => {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ image: imageData }),
+          body: JSON.stringify({ image: imageDataUrl }),
         });
         
         if (!response.ok) {
@@ -118,10 +132,16 @@ const LetterClassificationApp = () => {
         }
         
         const result = await response.json();
-        setPredictions(result);
+        if (result.length === 0) {
+          setPredictions([]);
+          alert("No letter detected. Please draw a clearer letter and try again.");
+        } else {
+          setPredictions(result);
+        }
       } catch (error) {
         console.error('Error:', error);
         setPredictions([]);
+        alert("An error occurred during classification. Please try again.");
       }
     }
   };

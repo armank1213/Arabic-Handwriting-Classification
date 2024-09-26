@@ -1,13 +1,18 @@
 import base64
 import io
+import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
-from PIL import Image
+from PIL import Image, ImageChops
 import numpy as np
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -47,9 +52,14 @@ class ArabicCharNet(nn.Module):
         return x
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+logger.info(f"Using device: {device}")
+
 model = ArabicCharNet(num_classes=28).to(device)
 model.load_state_dict(torch.load('Arabic_OCR_PyTorch.pth', map_location=device))
 model.eval()
+
+logger.info("Model loaded successfully")
+logger.debug(f"Model architecture: {model}")
 
 arabic_chars = 'أبتثجحخدذرزسشصضطظعغفقكلمنهوي'
 arabic_characters = ['alef', 'beh', 'teh', 'theh', 'jeem', 'hah', 'khah', 'dal', 'thal',
@@ -57,7 +67,6 @@ arabic_characters = ['alef', 'beh', 'teh', 'theh', 'jeem', 'hah', 'khah', 'dal',
                     'ghain', 'feh', 'qaf', 'kaf', 'lam', 'meem', 'noon', 'heh', 'waw', 'yeh']
 
 transform = transforms.Compose([
-    transforms.Resize((32, 32)),
     transforms.Grayscale(),
     transforms.ToTensor(),
     transforms.Normalize((0.5,), (0.5,))
@@ -72,23 +81,52 @@ async def classify_image(image_data: ImageData):
         # Decode the base64 image
         image_bytes = base64.b64decode(image_data.image.split(',')[1])
         
-        # Log the image size
+        # Open the image
         image = Image.open(io.BytesIO(image_bytes))
-        print(f"Received image size: {image.size}")
+        logger.info(f"Received image size: {image.size}")
         
-        # Save the received image for inspection
-        image.save("received_image.png")
+        # save the image to a file
+        image.save('received_image.png')
+
+        # Convert image to grayscale
+        gray_image = image.convert('L')
+
+        # Check if the image is empty (all pixels are black or very close to black)
+        bbox = ImageChops.difference(gray_image, Image.new('L', gray_image.size, 0)).getbbox()
+        if bbox is None:
+            logger.warning("Empty canvas detected")
+            return []
+
+        # Calculate the percentage of non-black pixels
+        img_array = np.array(gray_image)
+        non_black_pixels = np.sum(img_array > 10)  # Threshold of 10 to account for slight variations
+        total_pixels = img_array.size
+        non_black_percentage = (non_black_pixels / total_pixels) * 100
+
+        logger.info(f"Percentage of non-black pixels: {non_black_percentage:.2f}%")
+
+        # If less than 1% of pixels are non-black, consider it an empty canvas
+        if non_black_percentage < 1:
+            logger.warning("Nearly empty canvas detected")
+            return []
 
         # Preprocess the image
         image_tensor = transform(image).unsqueeze(0).to(device)
-        print(f"Preprocessed tensor shape: {image_tensor.shape}")
-        print(f"Tensor min: {image_tensor.min()}, max: {image_tensor.max()}")
+        logger.info(f"Preprocessed tensor shape: {image_tensor.shape}")
+        logger.info(f"Tensor min: {image_tensor.min().item()}, max: {image_tensor.max().item()}, mean: {image_tensor.mean().item()}")
+
 
         # Perform the classification
         with torch.no_grad():
             output = model(image_tensor)
+            logger.debug(f"Raw model output: {output}")
+
             probabilities = torch.nn.functional.softmax(output, dim=1)
+            logger.debug(f"Softmax probabilities: {probabilities}")
+
             top3_prob, top3_catid = torch.topk(probabilities, 3)
+            logger.debug(f"Top 3 category IDs: {top3_catid}")
+            logger.debug(f"Top 3 probabilities: {top3_prob}")
 
         results = []
         for i in range(3):
@@ -99,9 +137,10 @@ async def classify_image(image_data: ImageData):
                 "confidence": f"{top3_prob[0][i].item()*100:.2f}%"
             })
 
+        logger.info(f"Classification results: {results}")
         return results
     except Exception as e:
-        print(f"Error: {str(e)}")
+        logger.exception(f"Error in classification: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

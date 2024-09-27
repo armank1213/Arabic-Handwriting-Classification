@@ -38,17 +38,29 @@ To set up this project, follow these steps:
 
 The following packages are necessary for this project:
 
-- tensorflow
+- torch
+- torchvision
+- torchaudio
+- torchmetrics
+- torchmetrics.classification
+- torchvision
+- torchvision.models
+- torchvision.transforms
+- torchvision.io
+- torchvision.io.image
+- torchvision.io.video
+- torchvision.io.video.read
+- torchvision.io.video.write
+- pandas
 - numpy
 - matplotlib
 - opencv-python
-- scikit-learn
-- pandas
+- tensorflow
 
 You can install these packages manually using pip:
 
 ```bash
-pip install tensorflow numpy matplotlib opencv-python scikit-learn pandas
+pip install torch torchvision torchaudio torchmetrics torchmetrics.classification torchvision opencv-python pandas numpy matplotlib
 ```
 
 Or simply use the `requirements.txt` file as mentioned in step 3 of the installation process.
@@ -60,11 +72,11 @@ To run the classification model:
 1. Ensure you have the dataset in the correct directory (see [Dataset](#dataset) section).
 2. Run the training script:
    ```bash
-   python train.py
+   python train.py --data_dir <path_to_data_directory> --model_name <model_name> --epochs <number_of_epochs> --batch_size <batch_size> --learning_rate <learning_rate>
    ```
 3. For evaluation, use:
    ```bash
-   python evaluate.py
+   python evaluate.py --data_dir <path_to_data_directory> --model_name <model_name> --batch_size <batch_size>
    ```
 
 ## Dataset

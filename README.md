@@ -55,7 +55,7 @@ The following packages are necessary for this project:
 - numpy
 - matplotlib
 - opencv-python
-- tensorflow
+- scikit-learn
 
 You can install these packages manually using pip:
 
